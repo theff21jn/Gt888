@@ -25,8 +25,21 @@ function createPrismaClient() {
   });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+// สร้าง client แบบ lazy ผ่าน Proxy — ค่อยเชื่อมต่อจริง (และเช็ค DATABASE_URL)
+// ตอนถูกเรียกใช้ครั้งแรกเท่านั้น ไม่ใช่ตอน import module
+// สำคัญสำหรับ Vercel: ขั้น build จะ collect page data โดยไม่มี env ทำให้
+// ถ้า init ทันทีตอน import จะ throw แล้ว build ล้ม
+function getPrisma(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient();
+  }
+  return globalForPrisma.prisma;
 }
+
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getPrisma();
+    const value = Reflect.get(client, prop);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

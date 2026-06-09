@@ -10,6 +10,9 @@ export const metadata: Metadata = {
   title: "บัญชีของฉัน — TopUp",
 };
 
+// ขึ้นกับ session เสมอ — ไม่ต้อง prerender/collect ตอน build
+export const dynamic = "force-dynamic";
+
 export default async function AccountPage() {
   const session = await auth();
   if (!session?.user) redirect("/login?callbackUrl=/account");
