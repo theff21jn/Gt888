@@ -12,20 +12,26 @@ Landing page สำหรับเว็บไซต์เติมเกม ส
 - Framer Motion
 - lucide-react (icons)
 
-**Backend (โครงสำหรับต่อยอด — ดูหัวข้อ Roadmap)**
+**Backend**
 - Next.js API Routes
-- Prisma
-- PostgreSQL
+- Prisma 7 (+ Neon driver adapter)
+- PostgreSQL (Neon)
+- Auth.js (NextAuth v5) — ระบบ login
 
 ## เริ่มใช้งาน
 
 ```bash
 cd game-topup
-npm install
+npm install                 # postinstall จะ prisma generate ให้อัตโนมัติ
+cp .env.example .env        # แล้วกรอกค่า (ดูหัวข้อ Environment ด้านล่าง)
+npm run db:push             # สร้างตารางบน Neon ตาม schema
 npm run dev
 ```
 
 เปิด http://localhost:3000
+
+> ถ้ายังไม่ใส่ `.env` หน้า landing (`/`) ยังเปิดได้ปกติ แต่หน้า login/register
+> ต้องมี `DATABASE_URL` + `AUTH_SECRET` ถึงจะทำงาน
 
 ```bash
 npm run build   # build สำหรับ production
@@ -46,13 +52,61 @@ game-topup/
 │  ├─ motion/           # Reveal / Stagger (Framer Motion)
 │  └─ sections/         # navbar, hero, games, how-it-works, features,
 │                       # testimonials, faq, cta, footer
+│  ├─ auth/             # login-form, register-form, oauth-buttons, auth-shell
+│  └─ providers.tsx     # SessionProvider (next-auth)
+├─ app/
+│  ├─ login/ register/  # หน้า login / สมัครสมาชิก (server + client form)
+│  ├─ account/          # หน้าบัญชี (ป้องกันด้วย middleware)
+│  └─ api/
+│     ├─ auth/[...nextauth]/  # route handler ของ Auth.js
+│     └─ register/      # สมัครสมาชิก (zod + bcrypt)
 ├─ lib/
 │  ├─ utils.ts          # cn() helper
-│  └─ data.ts           # ข้อมูลตัวอย่าง (เกม, ขั้นตอน, จุดเด่น, รีวิว, FAQ)
+│  ├─ data.ts           # ข้อมูลตัวอย่าง (เกม, ขั้นตอน, จุดเด่น, รีวิว, FAQ)
+│  ├─ prisma.ts         # PrismaClient singleton (+ Neon adapter)
+│  ├─ oauth.ts          # เช็คว่า OAuth provider ตัวไหนเปิดใช้งาน
+│  └─ validations/auth.ts  # zod schema (login/register)
+├─ prisma/
+│  └─ schema.prisma     # User/Account/Session/VerificationToken
+├─ prisma.config.ts     # Prisma 7 config (datasource url สำหรับ migrate)
+├─ auth.ts              # NextAuth (adapter + credentials)
+├─ auth.config.ts       # edge-safe config (providers + callbacks)
+├─ middleware.ts        # ป้องกัน /account
 ├─ tailwind.config.ts
 ├─ components.json      # config ของ shadcn/ui (เพิ่ม component ด้วย CLI ได้)
 └─ tsconfig.json
 ```
+
+## Environment
+
+คัดลอก `.env.example` เป็น `.env` แล้วกรอก:
+
+| ตัวแปร | จำเป็น | ที่มา |
+|---|---|---|
+| `DATABASE_URL` | ✅ | Neon dashboard → Connection string (ตัวที่มี `-pooler`) |
+| `AUTH_SECRET` | ✅ | รันคำสั่ง `npx auth secret` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | – | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) |
+| `AUTH_DISCORD_ID` / `AUTH_DISCORD_SECRET` | – | [Discord Developer Portal](https://discord.com/developers/applications) |
+
+> ปุ่ม OAuth จะ **ซ่อนอัตโนมัติ** ถ้ายังไม่ได้ใส่ key — ใช้ email/password ได้เลย
+> OAuth callback URL: `{origin}/api/auth/callback/google` และ `.../discord`
+
+## Auth ที่ทำไว้
+
+- สมัครสมาชิก email/password (hash ด้วย bcrypt, validate ด้วย zod)
+- เข้าสู่ระบบ email/password + OAuth (Google / Discord)
+- session แบบ JWT, navbar รู้สถานะ login, หน้า `/account` ป้องกันด้วย middleware
+- หน้า: [`/login`](app/login/page.tsx) · [`/register`](app/register/page.tsx) · [`/account`](app/account/page.tsx)
+
+## Deploy บน Vercel
+
+1. push ขึ้น GitHub แล้ว import โปรเจกต์ใน Vercel
+2. ใส่ Environment Variables ทั้งหมดจากตารางด้านบน (ตั้ง `AUTH_URL` เป็นโดเมนจริงด้วย)
+3. Build command เป็น `prisma generate && next build` อยู่แล้ว (ใน `package.json`)
+4. รัน migration ครั้งแรก: `npm run db:push` (จากเครื่อง local ที่ตั้ง `DATABASE_URL` ชี้ไป Neon)
+
+> Prisma 7 + Neon adapter ใช้ Neon serverless driver (HTTP/WebSocket) จึงเข้ากับ
+> Vercel serverless ได้ดี ไม่ต้องตั้ง connection pooling แยกเอง
 
 ## เพิ่ม shadcn/ui component
 
@@ -62,22 +116,18 @@ game-topup/
 npx shadcn@latest add dialog
 ```
 
-## Roadmap: ต่อ Backend (Prisma + PostgreSQL)
+## Roadmap: ต่อ flow เติมเกม (ยังไม่ได้ทำ)
 
-ขั้นถัดไปสำหรับทำเป็น full-stack:
+ส่วนที่ทำแล้ว: landing page + ระบบ login/สมัครสมาชิก
+ขั้นถัดไปสำหรับทำให้เติมเกมได้จริง:
 
-1. ติดตั้ง Prisma
-   ```bash
-   npm install prisma @prisma/client
-   npx prisma init --datasource-provider postgresql
-   ```
-2. ตั้งค่า `DATABASE_URL` ใน `.env`
-3. ออกแบบ schema (ตัวอย่างเอนทิตี): `Game`, `Package`, `Order`, `User`, `Payment`
-4. สร้าง API routes ใต้ `app/api/` เช่น
-   - `GET /api/games` — ดึงรายการเกม
-   - `POST /api/orders` — สร้างคำสั่งเติมเกม
+1. เพิ่ม model ใน `prisma/schema.prisma`: `Game`, `Package`, `Order`, `Payment`
+2. สร้าง API routes:
+   - `GET /api/games` — ดึงรายการเกม (แทนข้อมูลใน `lib/data.ts`)
+   - `POST /api/orders` — สร้างคำสั่งเติมเกม (ต้อง login)
    - `POST /api/payments/webhook` — รับ callback จาก payment gateway
-5. แทนที่ข้อมูลใน `lib/data.ts` ด้วยข้อมูลจริงจากฐานข้อมูล
+3. เชื่อม payment gateway (TrueMoney / PromptPay / Stripe ฯลฯ)
+4. หน้าประวัติคำสั่งซื้อใน `/account`
 
-> หมายเหตุ: ตอนนี้เป็นเฟส UI/landing เท่านั้น ข้อมูลทั้งหมดเป็นตัวอย่างใน `lib/data.ts`
-> ลิงก์ปุ่ม/เมนูยังเป็น placeholder (`#`) รอเชื่อมกับ flow จริงในเฟส backend
+> หมายเหตุ: ข้อมูลเกม/รีวิว/FAQ บนหน้า landing ยังเป็นตัวอย่างใน `lib/data.ts`
+> ลิงก์ปุ่มเติมเกม (`#games`) ยังไม่ผูกกับ flow จริง
