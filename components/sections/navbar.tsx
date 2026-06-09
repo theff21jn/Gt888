@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gamepad2, Menu, X } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Gamepad2, Menu, X, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +19,8 @@ const links = [
 export function Navbar() {
   const [scrolled, setScrolled] = React.useState(false);
   const [open, setOpen] = React.useState(false);
+  const { data: session, status } = useSession();
+  const isAuthed = status === "authenticated" && !!session?.user;
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -57,9 +61,18 @@ export function Navbar() {
         </div>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" size="sm" asChild>
-            <a href="#">เข้าสู่ระบบ</a>
-          </Button>
+          {isAuthed ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/account">
+                <User className="size-4" />
+                {session.user.name ?? "บัญชีของฉัน"}
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/login">เข้าสู่ระบบ</Link>
+            </Button>
+          )}
           <Button size="sm" asChild>
             <a href="#games">เติมเลย</a>
           </Button>
@@ -95,9 +108,20 @@ export function Navbar() {
                 </a>
               ))}
               <div className="mt-2 flex gap-2">
-                <Button variant="outline" className="flex-1" asChild>
-                  <a href="#">เข้าสู่ระบบ</a>
-                </Button>
+                {isAuthed ? (
+                  <Button variant="outline" className="flex-1" asChild>
+                    <Link href="/account" onClick={() => setOpen(false)}>
+                      <User className="size-4" />
+                      บัญชีของฉัน
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" className="flex-1" asChild>
+                    <Link href="/login" onClick={() => setOpen(false)}>
+                      เข้าสู่ระบบ
+                    </Link>
+                  </Button>
+                )}
                 <Button className="flex-1" asChild>
                   <a href="#games" onClick={() => setOpen(false)}>
                     เติมเลย
